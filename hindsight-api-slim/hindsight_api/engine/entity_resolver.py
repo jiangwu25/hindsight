@@ -143,7 +143,7 @@ _DIGIT_RUN = re.compile(r"\d+(?:\.\d+)*")
 
 @lru_cache(maxsize=100_000)
 def _numbers_in(name: str) -> tuple[str, ...]:
-    """Normalized numeric runs in a name, sorted ("UA0123" gives ("123",), "4.0" gives ("4",)).
+    """Find the numbers in a name and sort them ("UA0123" gives ("123",), "4.0" gives ("4",)).
 
     Memoized for the same reason as ``_tokens_match``: the in-batch caller compares each name
     with many others.
@@ -152,11 +152,9 @@ def _numbers_in(name: str) -> tuple[str, ...]:
     for run in _DIGIT_RUN.findall(name):
         parts = run.split(".")
         parts[0] = parts[0].lstrip("0") or "0"
-        # A single dot can be a decimal; keep multi-dot identifiers such as IP addresses intact.
-        if len(parts) == 2:
-            parts[1] = parts[1].rstrip("0")
-            if not parts[1]:
-                parts.pop()
+        # Drop an all-zero part, but keep 3.10 distinct from 3.1.
+        if len(parts) == 2 and not parts[1].strip("0"):
+            parts.pop()
         numbers.append(".".join(parts))
     return tuple(sorted(numbers))
 

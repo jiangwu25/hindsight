@@ -262,9 +262,16 @@ def test_decimal_number_variants_remain_compatible():
     assert _tokens_are_compatible("version 1.0", "version 1")
     assert _tokens_are_compatible("gpt-4.0", "gpt-4")
     assert _tokens_are_compatible("python 3.0", "python 3")
-    assert _tokens_are_compatible("gpt-4.50", "gpt-4.5")
+    assert _tokens_are_compatible("gpt-4.00", "gpt-4")
     assert not _tokens_are_compatible("gpt-4.5", "gpt-45")
     assert not _tokens_are_compatible("host 192.168.1.0", "host 192.168.1")
+
+
+def test_nonzero_decimal_parts_stay_distinct():
+    assert not _tokens_are_compatible("python 3.1", "python 3.10")
+    assert not _tokens_are_compatible("v1.1", "v1.10")
+    assert not _tokens_are_compatible("python 3.10", "python 3.100")
+    assert not _tokens_are_compatible("gpt-4.50", "gpt-4.5")
 
 
 @pytest.mark.asyncio
@@ -291,6 +298,18 @@ async def test_decimal_number_variant_merges_onto_a_recent_entity():
         cooccurs_with=set(),
     )
     assert name == "GPT-4"
+
+
+@pytest.mark.asyncio
+async def test_different_decimal_versions_do_not_merge_onto_a_recent_entity():
+    name = await _resolve_one(
+        _resolver({"python 3.10": "new-python-3.10-id"}),
+        "Python 3.10",
+        ("python-3.1-id", "Python 3.1", {}, NOW, 3),
+        nearby=[],
+        cooccurs_with=set(),
+    )
+    assert name == "Python 3.10"
 
 
 async def _resolve_new_names(names: list[str]) -> list[str]:
@@ -369,3 +388,9 @@ async def test_names_with_different_numbers_stay_separate_in_the_same_batch():
 @pytest.mark.asyncio
 async def test_decimal_number_variants_merge_in_the_same_batch():
     assert await _resolve_new_names(["GPT-4", "GPT-4.0"]) == ["GPT-4", "GPT-4"]
+
+
+@pytest.mark.asyncio
+async def test_different_decimal_versions_stay_separate_in_the_same_batch():
+    assert await _resolve_new_names(["Python 3.1", "Python 3.10"]) == ["Python 3.1", "Python 3.10"]
+    assert await _resolve_new_names(["v1.1", "v1.10"]) == ["v1.1", "v1.10"]
