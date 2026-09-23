@@ -138,6 +138,19 @@ def _tokens_match(a: str, b: str) -> bool:
     return a == b or a.startswith(b) or b.startswith(a) or SequenceMatcher(None, a, b).ratio() >= _MIN_TOKEN_SIMILARITY
 
 
+_DIGIT_RUN = re.compile(r"\d+")
+
+
+@lru_cache(maxsize=100_000)
+def _numbers_in(name: str) -> tuple[str, ...]:
+    """The numbers in a name, sorted and without leading zeros ("UA0123" gives ("123",)).
+
+    Memoized for the same reason as ``_tokens_match``: the in-batch caller compares each name
+    with many others.
+    """
+    return tuple(sorted(run.lstrip("0") or "0" for run in _DIGIT_RUN.findall(name)))
+
+
 def _tokens_are_compatible(a: str, b: str) -> bool:
     """Whether two multi-word names agree word by word.
 
@@ -150,7 +163,16 @@ def _tokens_are_compatible(a: str, b: str) -> bool:
     Single-word names are exempt, and deliberately: with one token the whole-name check *is* the
     token check, and imposing this on top would reject real variants that have no long shared word
     to hide behind ("Nick"/"Nicolas" is 0.55).
+
+    Numbers get a stricter rule. A number names one specific thing, so "Room 101" and "Room 102"
+    are two rooms and not a typo, yet 101/102 is 0.67 by sequence ratio and passes the word cutoff.
+    When both names contain numbers, the numbers must match, and single-word names are not exempt
+    from this ("UA123"/"UA124"). If only one name has a number, the word check decides as before
+    ("Python"/"Python 3").
     """
+    numbers_a, numbers_b = _numbers_in(a), _numbers_in(b)
+    if numbers_a and numbers_b and numbers_a != numbers_b:
+        return False
     ta, tb = _TRGM_WORD.findall(a.lower()), _TRGM_WORD.findall(b.lower())
     if len(ta) < 2 and len(tb) < 2:
         return True

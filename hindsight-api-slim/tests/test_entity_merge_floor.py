@@ -246,6 +246,32 @@ def test_single_word_names_are_exempt_from_word_level_agreement():
     assert _tokens_are_compatible("iran", "iraq"), "not compatible in truth, but not this rule's job"
 
 
+def test_names_with_different_numbers_are_not_compatible():
+    """101/102 is 0.67 by sequence ratio, over the word cutoff, so a different number passed as a
+    typo. Single-word names are not exempt from this rule."""
+    assert not _tokens_are_compatible("room 101", "room 102")
+    assert not _tokens_are_compatible("boeing 737", "boeing 747")
+    assert not _tokens_are_compatible("2023 tax return", "2024 tax return")
+    assert not _tokens_are_compatible("ua123", "ua124"), "single word"
+    assert _tokens_are_compatible("gpt-4", "gpt 4"), "the same number"
+    assert _tokens_are_compatible("ua0123", "ua123"), "leading zeros do not count"
+    assert _tokens_are_compatible("python", "python 3"), "a number on one side is left to the word check"
+
+
+@pytest.mark.asyncio
+async def test_a_different_number_is_not_merged_onto_a_recent_entity():
+    """Room 102 against a Room 101 seen today. The name term gives 0.44 and same-day recency adds
+    0.2, so the pair cleared the 0.6 cutoff with no shared context at all."""
+    name = await _resolve_one(
+        _resolver({"room 102": "new-room-102-id"}),
+        "Room 102",
+        ("room-101-id", "Room 101", {}, NOW, 3),
+        nearby=[],
+        cooccurs_with=set(),
+    )
+    assert name == "Room 102"
+
+
 async def _resolve_new_names(names: list[str]) -> list[str]:
     """Resolve several brand-new names arriving in ONE retain, and report the entity each got.
 
@@ -306,3 +332,14 @@ async def test_same_batch_surface_variants_of_one_name_still_collapse():
         "Jean Luc Picard",
     ], "separator"
     assert await _resolve_new_names(["Aster", "aster 0"]) == ["Aster", "Aster"], "single word, decorated"
+
+
+@pytest.mark.asyncio
+async def test_names_with_different_numbers_stay_separate_in_the_same_batch():
+    """Room 101/Room 102 is 0.64 by trigram, over the 0.5 in-batch bar, so one retain that named
+    both rooms created a single entity."""
+    assert await _resolve_new_names(["Room 101", "Room 102"]) == ["Room 101", "Room 102"]
+    assert await _resolve_new_names(["2023 Tax Return", "2024 Tax Return"]) == [
+        "2023 Tax Return",
+        "2024 Tax Return",
+    ]
