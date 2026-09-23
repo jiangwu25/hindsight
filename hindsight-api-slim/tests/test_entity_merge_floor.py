@@ -258,6 +258,15 @@ def test_names_with_different_numbers_are_not_compatible():
     assert _tokens_are_compatible("python", "python 3"), "a number on one side is left to the word check"
 
 
+def test_decimal_number_variants_remain_compatible():
+    assert _tokens_are_compatible("version 1.0", "version 1")
+    assert _tokens_are_compatible("gpt-4.0", "gpt-4")
+    assert _tokens_are_compatible("python 3.0", "python 3")
+    assert _tokens_are_compatible("gpt-4.50", "gpt-4.5")
+    assert not _tokens_are_compatible("gpt-4.5", "gpt-45")
+    assert not _tokens_are_compatible("host 192.168.1.0", "host 192.168.1")
+
+
 @pytest.mark.asyncio
 async def test_a_different_number_is_not_merged_onto_a_recent_entity():
     """Room 102 against a Room 101 seen today. The name term gives 0.44 and same-day recency adds
@@ -270,6 +279,18 @@ async def test_a_different_number_is_not_merged_onto_a_recent_entity():
         cooccurs_with=set(),
     )
     assert name == "Room 102"
+
+
+@pytest.mark.asyncio
+async def test_decimal_number_variant_merges_onto_a_recent_entity():
+    name = await _resolve_one(
+        _resolver({"gpt-4.0": "new-gpt-4.0-id"}),
+        "GPT-4.0",
+        ("gpt-4-id", "GPT-4", {}, NOW, 3),
+        nearby=[],
+        cooccurs_with=set(),
+    )
+    assert name == "GPT-4"
 
 
 async def _resolve_new_names(names: list[str]) -> list[str]:
@@ -343,3 +364,8 @@ async def test_names_with_different_numbers_stay_separate_in_the_same_batch():
         "2023 Tax Return",
         "2024 Tax Return",
     ]
+
+
+@pytest.mark.asyncio
+async def test_decimal_number_variants_merge_in_the_same_batch():
+    assert await _resolve_new_names(["GPT-4", "GPT-4.0"]) == ["GPT-4", "GPT-4"]

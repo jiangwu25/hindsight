@@ -138,17 +138,27 @@ def _tokens_match(a: str, b: str) -> bool:
     return a == b or a.startswith(b) or b.startswith(a) or SequenceMatcher(None, a, b).ratio() >= _MIN_TOKEN_SIMILARITY
 
 
-_DIGIT_RUN = re.compile(r"\d+")
+_DIGIT_RUN = re.compile(r"\d+(?:\.\d+)*")
 
 
 @lru_cache(maxsize=100_000)
 def _numbers_in(name: str) -> tuple[str, ...]:
-    """The numbers in a name, sorted and without leading zeros ("UA0123" gives ("123",)).
+    """Normalized numeric runs in a name, sorted ("UA0123" gives ("123",), "4.0" gives ("4",)).
 
     Memoized for the same reason as ``_tokens_match``: the in-batch caller compares each name
     with many others.
     """
-    return tuple(sorted(run.lstrip("0") or "0" for run in _DIGIT_RUN.findall(name)))
+    numbers = []
+    for run in _DIGIT_RUN.findall(name):
+        parts = run.split(".")
+        parts[0] = parts[0].lstrip("0") or "0"
+        # A single dot can be a decimal; keep multi-dot identifiers such as IP addresses intact.
+        if len(parts) == 2:
+            parts[1] = parts[1].rstrip("0")
+            if not parts[1]:
+                parts.pop()
+        numbers.append(".".join(parts))
+    return tuple(sorted(numbers))
 
 
 def _tokens_are_compatible(a: str, b: str) -> bool:
