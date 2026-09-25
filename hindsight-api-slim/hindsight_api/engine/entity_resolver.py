@@ -142,8 +142,8 @@ _DIGIT_RUN = re.compile(r"\d+(?:\.\d+)*")
 
 
 @lru_cache(maxsize=100_000)
-def _numbers_in(name: str) -> tuple[str, ...]:
-    """Find the numbers in a name and sort them ("UA0123" gives ("123",), "4.0" gives ("4",)).
+def _numbers_in(name: str) -> frozenset[str]:
+    """Find the numbers in a name ("UA0123" gives {"123"}, "4.0" gives {"4"}).
 
     Memoized for the same reason as ``_tokens_match``: the in-batch caller compares each name
     with many others.
@@ -156,7 +156,7 @@ def _numbers_in(name: str) -> tuple[str, ...]:
         if len(parts) == 2 and not parts[1].strip("0"):
             parts.pop()
         numbers.append(".".join(parts))
-    return tuple(sorted(numbers))
+    return frozenset(numbers)
 
 
 def _tokens_are_compatible(a: str, b: str) -> bool:
@@ -174,12 +174,14 @@ def _tokens_are_compatible(a: str, b: str) -> bool:
 
     Numbers get a stricter rule. A number names one specific thing, so "Room 101" and "Room 102"
     are two rooms and not a typo, yet 101/102 is 0.67 by sequence ratio and passes the word cutoff.
-    When both names contain numbers, the numbers must match, and single-word names are not exempt
-    from this ("UA123"/"UA124"). If only one name has a number, the word check decides as before
-    ("Python"/"Python 3").
+    When each name has a number the other lacks, they are two things, and single-word names are not
+    exempt from this ("UA123"/"UA124"). A first version required the numbers to match exactly, which
+    also split a name from its more specific form ("Q3 earnings"/"Q3 2024 earnings", "Boeing 737
+    MAX"/"Boeing 737 MAX 8"); when one name's numbers are a subset of the other's, the word check
+    decides as before, as it does when only one name has a number ("Python"/"Python 3").
     """
     numbers_a, numbers_b = _numbers_in(a), _numbers_in(b)
-    if numbers_a and numbers_b and numbers_a != numbers_b:
+    if numbers_a - numbers_b and numbers_b - numbers_a:
         return False
     ta, tb = _TRGM_WORD.findall(a.lower()), _TRGM_WORD.findall(b.lower())
     if len(ta) < 2 and len(tb) < 2:

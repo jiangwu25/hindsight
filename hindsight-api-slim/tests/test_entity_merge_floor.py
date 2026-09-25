@@ -256,6 +256,14 @@ def test_names_with_different_numbers_are_not_compatible():
     assert _tokens_are_compatible("gpt-4", "gpt 4"), "the same number"
     assert _tokens_are_compatible("ua0123", "ua123"), "leading zeros do not count"
     assert _tokens_are_compatible("python", "python 3"), "a number on one side is left to the word check"
+    assert not _tokens_are_compatible("room 101 building 2", "room 102 building 2"), "one number differs"
+
+
+def test_a_name_and_its_more_numbered_form_are_left_to_the_word_check():
+    """Exact number equality split a name from its more specific form. When one name's numbers are a
+    subset of the other's, the word check decides."""
+    assert _tokens_are_compatible("q3 earnings", "q3 2024 earnings")
+    assert _tokens_are_compatible("boeing 737 max", "boeing 737 max 8")
 
 
 def test_decimal_number_variants_remain_compatible():
